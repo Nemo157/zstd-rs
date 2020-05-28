@@ -1,4 +1,5 @@
 use crate::map_error_code;
+use crate::dict::EncoderDictionary;
 
 use std::io;
 use zstd_safe;
@@ -7,55 +8,42 @@ use zstd_safe;
 ///
 /// This reduces memory usage compared to calling `compress` multiple times.
 /// The compressed blocks are still completely independent.
-#[derive(Default)]
-pub struct Compressor {
+pub struct Compressor<'a> {
     context: zstd_safe::CCtx<'static>,
-    dict: Vec<u8>,
+    dict: EncoderDictionary<'a>,
 }
 
-impl Compressor {
+impl<'a> Compressor<'a> {
     /// Creates a new zstd compressor
-    pub fn new() -> Self {
-        Compressor::with_dict(Vec::new())
+    pub fn new(level: i32) -> Self {
+        Compressor::with_dict(&[], level)
     }
 
     /// Creates a new zstd compressor, using the given dictionary.
-    pub fn with_dict(dict: Vec<u8>) -> Self {
+    pub fn with_dict(dict: &'a [u8], level: i32) -> Self {
         Compressor {
             context: zstd_safe::create_cctx(),
-            dict,
+            dict: EncoderDictionary::new(dict, level),
         }
     }
 
-    /// Compress a single block of data to the given destination buffer.
-    ///
-    /// Returns the number of bytes written, or an error if something happened
-    /// (for instance if the destination buffer was too small).
-    ///
-    /// A level of `0` uses zstd's default (currently `3`).
     pub fn compress_to_buffer(
         &mut self,
         source: &[u8],
         destination: &mut [u8],
-        level: i32,
     ) -> io::Result<usize> {
-        zstd_safe::compress_using_dict(
+        zstd_safe::compress_using_cdict(
             &mut self.context,
             destination,
             source,
-            &self.dict[..],
-            level,
+            self.dict.as_cdict(),
         )
         .map_err(map_error_code)
     }
 
-    /// Compresses a block of data and returns the compressed result.
-    ///
-    /// A level of `0` uses zstd's default (currently `3`).
     pub fn compress(
         &mut self,
         data: &[u8],
-        level: i32,
     ) -> io::Result<Vec<u8>> {
         // We allocate a big buffer, slightly larger than the input data.
         let buffer_len = zstd_safe::compress_bound(data.len());
@@ -64,7 +52,7 @@ impl Compressor {
             // Use all capacity.
             // Memory may not be initialized, but we won't read it.
             buffer.set_len(buffer_len);
-            let len = self.compress_to_buffer(data, &mut buffer[..], level)?;
+            let len = self.compress_to_buffer(data, &mut buffer[..])?;
             buffer.set_len(len);
         }
 
@@ -76,5 +64,5 @@ impl Compressor {
 fn _assert_traits() {
     fn _assert_send<T: Send>(_: T) {}
 
-    _assert_send(Compressor::new());
+    _assert_send(Compressor::new(0));
 }

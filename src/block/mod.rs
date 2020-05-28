@@ -23,14 +23,14 @@ pub fn compress_to_buffer(
     destination: &mut [u8],
     level: i32,
 ) -> io::Result<usize> {
-    Compressor::new().compress_to_buffer(source, destination, level)
+    Compressor::new(level).compress_to_buffer(source, destination)
 }
 
 /// Compresses a block of data and returns the compressed result.
 ///
 /// A level of `0` uses zstd's default (currently `3`).
 pub fn compress(data: &[u8], level: i32) -> io::Result<Vec<u8>> {
-    Compressor::new().compress(data, level)
+    Compressor::new(level).compress(data)
 }
 
 /// Deompress a single block of data to the given destination buffer.

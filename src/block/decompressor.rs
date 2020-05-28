@@ -1,4 +1,5 @@
 use crate::map_error_code;
+use crate::dict::DecoderDictionary;
 
 use std::io;
 use zstd_safe;
@@ -6,23 +7,22 @@ use zstd_safe;
 /// Allows to decompress independently multiple blocks of data.
 ///
 /// This reduces memory usage compared to calling `decompress` multiple times.
-#[derive(Default)]
-pub struct Decompressor {
+pub struct Decompressor<'a> {
     context: zstd_safe::DCtx<'static>,
-    dict: Vec<u8>,
+    dict: DecoderDictionary<'a>,
 }
 
-impl Decompressor {
+impl<'a> Decompressor<'a> {
     /// Creates a new zstd decompressor.
     pub fn new() -> Self {
-        Decompressor::with_dict(Vec::new())
+        Decompressor::with_dict(&[])
     }
 
     /// Creates a new zstd decompressor, using the given dictionary.
-    pub fn with_dict(dict: Vec<u8>) -> Self {
+    pub fn with_dict(dict: &'a [u8]) -> Self {
         Decompressor {
             context: zstd_safe::create_dctx(),
-            dict,
+            dict: DecoderDictionary::new(dict),
         }
     }
 
@@ -35,11 +35,11 @@ impl Decompressor {
         source: &[u8],
         destination: &mut [u8],
     ) -> io::Result<usize> {
-        zstd_safe::decompress_using_dict(
+        zstd_safe::decompress_using_ddict(
             &mut self.context,
             destination,
             source,
-            &self.dict,
+            self.dict.as_ddict(),
         )
         .map_err(map_error_code)
     }
